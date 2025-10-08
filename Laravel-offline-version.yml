@@ -1,0 +1,64 @@
+name: Build Laravel (with vendor) and zip
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (repo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, bcmath, pcntl, openssl, pdo_mysql, zip
+
+      - name: Clone official Laravel skeleton
+        run: |
+          git clone --depth=1 https://github.com/laravel/laravel.git laravel-app
+
+      - name: Install Composer
+        run: |
+          php -r "copy('https://getcomposer.org/installer','composer-setup.php');"
+          php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+          php -r "unlink('composer-setup.php');"
+          composer --version
+
+      - name: Composer install (build vendor)
+        run: |
+          cd laravel-app
+          composer install --prefer-dist --no-dev --no-interaction --no-progress --optimize-autoloader
+          composer dump-autoload -o
+
+      - name: Zip project with vendor
+        run: |
+          cd ..
+          zip -r laravel-project-with-vendor.zip laravel-app -x "laravel-app/.git/*" "laravel-app/node_modules/*"
+
+      - name: Upload artifact (project zip)
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-project-zip
+          path: laravel-project-with-vendor.zip
+
+      - id: zip-cache
+        name: Zip composer cache (if exists)
+        run: |
+          CACHE_DIR=$(composer config cache-dir --global)
+          if [ -d "$CACHE_DIR" ]; then
+            zip -r composer-cache.zip "$CACHE_DIR"
+            echo "cache_zipped=true" >> $GITHUB_OUTPUT
+          else
+            echo "cache_zipped=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload composer cache (optional)
+        if: steps.zip-cache.outputs.cache_zipped == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: composer-cache
+          path: composer-cache.zip
