@@ -1,1 +1,37 @@
+name: Build Laravel (Offline Package)
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone Laravel
+        run: git clone https://github.com/laravel/laravel.git
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Install Composer
+        run: |
+          php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+          php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+
+      - name: Install dependencies
+        run: |
+          cd laravel
+          composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+
+      - name: Zip Laravel project
+        run: |
+          zip -r laravel.zip laravel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-offline
+          path: laravel.zip
